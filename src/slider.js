@@ -4,41 +4,97 @@
 	if(!$){
 		return console.warn('no jQuery');
 	}
-	var Slide = function(elem){
-		this.$elem = elem;
-		this.$container = elem.find('ul:first');
-		this.$slides = this.$container.find('li');
-		this.$next = elem.find('#next');
-		this.$prev = elem.find('#prev');
-		this.total = this.$slides.length;
-		this.slideHeight = this.$elem.height();
-		this.slideWidth = null;
-		this.containerWidth = null;
-		this.currentIndex = 0;
+	var Slide = function(elem,options){
+		// slider container outside ul element
+		this.$container = elem;
+		this.options = options;
+		this.settings = {
+			delay:3000
+		};
+		this.$slideList = elem.find('ul:first');
+		this.$slideItems = this.$slideList.find('li');
+		this.$next = elem.children('a:first');
+		this.$prev = elem.children('a:last');
+		this.$navList = elem.find('ol');
+		this.$navItems = this.$navList.find('li');
+		this.total = this.$slideItems.length;
+		this.containerWidth = this.$container.width();
+		this.containerHeight = this.$container.height();
+		this.slideItemWidth = null;
+		this.slideListWidth = null;
 		this.interval = null;
+		// current slider item's index
+		this.currentIndex = 0;
+		
 	}
 	Slide.prototype = {
 		run:function(){
 			this.init();
+			this.startPlay();
 		},
 		init:function(){
 			this.initEvent();
 			this.initStyle();
-			this.calculate();
-			this.startPlay();
+			this.initVariable();
 		},
 		initEvent:function(){
 			var self = this;
-			self.$elem.on('click',function(event){
+			this.$container.on('click',function(event){
 				self.click(event);
 			})
-			self.$elem.on('mouseenter',function(){
+			this.$container.on('mouseenter',function(){
 				self.mouseenter();
 			})
-			self.$elem.on('mouseleave',function(){
+			this.$container.on('mouseleave',function(){
 				self.mouseleave();
 			})
+			this.$navList.on('mouseover',function(){
+				self.mouseover(event);
+			})
 		},
+		initStyle:function(){
+			this.$container.css({
+				overflow:'hidden',
+				position:'relative',
+			})
+			this.$slideList.css({
+				listStyle:'none',
+				width:this.containerWidth*this.total,
+				position:'absolute',
+				left:0,
+				marginTop:0,
+				marginBottom:0,
+				paddingLeft:0
+			});
+			this.$slideItems.css({
+				width:this.containerWidth,
+				float:'left'
+			});
+			this.$next.css({
+				position:'absolute',
+				right:0,
+				top:this.containerHeight/2,
+				display:'none'
+			});
+			this.$prev.css({
+				position:'absolute',
+				left:0,
+				top:this.containerHeight/2,
+				display:'none'
+			});
+			this.$navList.css({
+				position:'absolute',
+				listStyle:'none',
+				bottom: 0,
+				display:'none'
+			})
+		},
+		initVariable:function(){
+			this.slideItemWidth = this.$slideItems.eq(0).width();
+			this.slideListWidth = this.$slideList.width();
+			$.extend(this.settings,this.options);
+		},
+		// click next or prev button to change slide item
 		click:function(event){
 			switch(event.target){
 				case this.$prev[0]:
@@ -49,76 +105,64 @@
 					break;
 			}
 		},
+		// stop autoplay when mouse enter
 		mouseenter:function(){
 			this.stopPlay();	
 			this.toggleBtn(1);
 		},
+		// start autoplay when mouse leave
 		mouseleave:function(){
 			this.startPlay();
 			this.toggleBtn(0);
 		},
+		mouseover:function(event){
+			var $target = $(event.target);
+			
+			if($target.prop('tagName') === 'LI'){
+				var targetIndex = +($target.text())-1;
+				var offset = - (targetIndex - this.currentIndex);
+				this.moveItem(offset);
+				this.currentIndex = targetIndex;
+			}
+			
+		},
+		// display or hide prev/next button
 		toggleBtn:function(flag){
 			if( flag === 1 ){
-				this.$prev.css('visibility','visible');
-				this.$next.css('visibility','visible');
+				//display button
+				this.$prev.show();
+				this.$next.show();
+				this.$navList.show();
 			}else if(flag === 0){
-				this.$prev.css('visibility','hidden');
-				this.$next.css('visibility','hidden');
+				// hide button
+				this.$prev.hide();
+				this.$next.hide();
+				this.$navList.hide();
 			}
 		},
-		calculate:function(){
-			this.slideWidth = this.$slides.eq(0).width();
-			this.containerWidth = this.$container.width();
-		},
-		initStyle:function(){
-			this.$elem.css({
-				overflow:'hidden',
-				position:'relative',
-			})
-			this.$container.css({
-				listStyle:'none',
-				width:(this.total*100)+'%',
-				position:'absolute',
-				left:0,
-				marginTop:0,
-				marginBottom:0,
-				paddingLeft:0
-			});
-			this.$slides.css({
-				width:(100/this.total)+'%',
-				float:'left'
-			});
-			this.$next.css({
-				position:'absolute',
-				right:0,
-				top:this.slideHeight/2,
-				visibility:'hidden'
-			});
-			this.$prev.css({
-				position:'absolute',
-				left:0,
-				top:this.slideHeight/2,
-				visibility:'hidden'
-			});
-		},
+		// move slide item
+		// move slide item to prev when offset is positive 
+		// move slide item to next when offset is negative 
 		moveItem:function(offset){
-			var distance = offset*this.slideWidth;
-			var currentLeft = this.$container.position().left;
-			this.$container.animate({
+			this.$slideList.stop(true,true);
+			var distance = offset*this.slideItemWidth;
+			var currentLeft = this.$slideList.position().left;
+			this.$slideList.animate({
 				left : currentLeft+distance
 			});	
 		},
 		startPlay:function(){
 			var self = this;
-			this.interval = setInterval(function(){
+			//  recursively call setTimeout to simulate setInterval
+			this.interval = setTimeout(function(){
 				self.next();
-			},1000);
+				self.startPlay();
+			},this.settings.delay);
 		},
 		stopPlay:function(){
-			if(this.interval){
-				clearInterval(this.interval);
-			}
+			clearTimeout(this.interval);
 		},
+		// change to next slide item
 		next:function(){
 			if(this.currentIndex+1<this.total){
 				this.moveItem(-1);
@@ -140,8 +184,9 @@
 
 	}
 
-	$.fn.slider = function(){
-		var slide = new Slide(this);
+	$.fn.slider = function(options){
+		var slide = new Slide(this,options);
 		slide.run();
+		return this;
 	}
 })(window.jQuery);
